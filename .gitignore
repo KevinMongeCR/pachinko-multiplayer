@@ -1,0 +1,25 @@
+# Node / React Native / Web
+node_modules/
+dist/
+build/
+*.log
+
+# Android
+.gradle/
+android/build/
+android/app/build/
+android/app/.cxx/
+
+# Rust
+target/
+
+# IDE
+.vscode/
+.idea/
+
+# Environment
+.env
+
+# OS
+.DS_Store
+Thumbs.db
