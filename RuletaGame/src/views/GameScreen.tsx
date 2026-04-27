@@ -6,6 +6,8 @@ import {
   TouchableOpacity,
   ScrollView,
   TextInput,
+  KeyboardAvoidingView,
+  Platform,
 } from 'react-native';
 import {
   Player,
@@ -304,8 +306,13 @@ const reiniciarConMonedasActuales = () => {
   const mainPlayer = players.find(player => player.userId === localUserId) || players[0];
   const isMyTurn = currentPlayer?.userId === localUserId;
 
-  return (
-    <ScrollView contentContainerStyle={styles.container}>
+    return (
+  <KeyboardAvoidingView
+    style={{flex: 1}}
+    behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
+    <ScrollView
+      contentContainerStyle={styles.container}
+      keyboardShouldPersistTaps="handled">
       <Text style={styles.title}>Pachinko</Text>
 
       <View style={styles.roomBox}>
@@ -498,6 +505,7 @@ const reiniciarConMonedasActuales = () => {
   </TouchableOpacity>
 </View>
     </ScrollView>
+    </KeyboardAvoidingView>
 
     
     );

@@ -30,10 +30,18 @@ function App() {
         return;
       }
 
-      setMessages(prev => [
-        ...prev,
-        `${data.type}: ${JSON.stringify(data.payload)}`,
-      ]);
+      if (data.type === 'general_chat_broadcast') {
+  setMessages(prev => [
+    ...prev,
+    `${data.payload.avatar} ${data.payload.nickname}: ${data.payload.message}`,
+  ]);
+  return;
+}
+
+setMessages(prev => [
+  ...prev,
+  `${data.type}: ${data.payload.message || 'Evento recibido'}`,
+]);
     };
 
     socket.onerror = () => {

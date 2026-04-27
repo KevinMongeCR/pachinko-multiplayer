@@ -466,14 +466,22 @@ async fn handle_connection(
                     let game_state = match room.game_state.as_mut() {
                         Some(gs) => gs,
                         None => {
-                            send_error(&clients, &temp_id, "La partida no ha iniciado");
+                            send_error(&clients, &temp_id, "No hay partida activa");
                             continue;
                         }
                     };
 
-                    if game_state.game_over {
-                        send_error(&clients, &temp_id, "La partida ya terminó");
-                        continue;
+                    let current_player = match game_state.players.get(game_state.turn_index) {
+                        Some(p) => p.clone(),
+                        None => {
+                            send_error(&clients, &temp_id, "Turno inválido");
+                            continue;
+                        }
+                    };
+
+                    if current_player.coins <= 0 {
+                        game_state.turn_index =
+                            find_next_active_turn_index(game_state, game_state.turn_index);
                     }
 
                     let current_player = match game_state.players.get(game_state.turn_index) {
@@ -544,6 +552,24 @@ async fn handle_connection(
                         }
                         _ => {}
                     }
+                    if game_state.pot == 0 && result != "Toma todo" && !game_state.game_over {
+                        let mut aportes = 0;
+
+                        for player in game_state.players.iter_mut() {
+                            if player.coins > 0 {
+                                player.coins -= 1;
+                                game_state.pot += 1;
+                                aportes += 1;
+                            }
+                        }
+
+                        if aportes > 0 {
+                            game_state.history.push(format!(
+                                "El pozo quedó en 0. Todos los jugadores activos aportaron 1 moneda. Nuevo pozo: {}",
+                                game_state.pot
+                            ));
+                        }
+                    }
 
                     let current_nickname = game_state.players[game_state.turn_index].nickname.clone();
                     let current_avatar = game_state.players[game_state.turn_index].avatar.clone();
@@ -556,7 +582,22 @@ async fn handle_connection(
                     game_state.history.push(history_entry.clone());
 
                     if !game_state.game_over {
-                        game_state.turn_index = (game_state.turn_index + 1) % game_state.players.len();
+                        let active_count = active_players_count(game_state);
+
+                        if active_count <= 1 {
+                            if let Some(winner) = find_last_active_player(game_state) {
+                                game_state.game_over = true;
+                                winner_nickname = winner.nickname.clone();
+
+                                game_state.history.push(format!(
+                                    "🏆 {} gana la partida por ser el último jugador con monedas",
+                                    winner.nickname
+                                ));
+                            }
+                        } else {
+                            game_state.turn_index =
+                                find_next_active_turn_index(game_state, game_state.turn_index);
+                        }
                     } else {
                         game_state
                             .history
@@ -798,8 +839,6 @@ async fn handle_connection(
                 broadcast_active_rooms(&rooms, &clients);
             }
 
-            
-
             _ => {
                 send_error(&clients, &temp_id, "Tipo de mensaje no soportado todavía");
             }
@@ -1019,4 +1058,34 @@ fn broadcast_active_rooms(rooms: &Rooms, clients: &Clients) {
     };
 
     broadcast_to_all(clients, &msg);
+}
+
+fn active_players_count(game_state: &GameState) -> usize {
+    game_state
+        .players
+        .iter()
+        .filter(|player| player.coins > 0)
+        .count()
+}
+
+fn find_next_active_turn_index(game_state: &GameState, current_index: usize) -> usize {
+    let total_players = game_state.players.len();
+
+    for offset in 1..=total_players {
+        let next_index = (current_index + offset) % total_players;
+
+        if game_state.players[next_index].coins > 0 {
+            return next_index;
+        }
+    }
+
+    current_index
+}
+
+fn find_last_active_player(game_state: &GameState) -> Option<GamePlayer> {
+    game_state
+        .players
+        .iter()
+        .find(|player| player.coins > 0)
+        .cloned()
 }

@@ -5,6 +5,9 @@ import {
   TextInput,
   TouchableOpacity,
   StyleSheet,
+   ScrollView,
+  KeyboardAvoidingView,
+  Platform,
 } from 'react-native';
 import {socketService} from '../services/socketService';
 
@@ -40,7 +43,13 @@ const LoginScreen = ({navigation}: Props) => {
 };
 
   return (
-    <View style={styles.container}>
+  <KeyboardAvoidingView
+    style={{flex: 1}}
+    behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+    <ScrollView
+      contentContainerStyle={styles.container}
+      keyboardShouldPersistTaps="handled">
+
       <Text style={styles.title}>Pachinko</Text>
 
       <Text style={styles.label}>Ingresa tu nickname</Text>
@@ -67,26 +76,32 @@ const LoginScreen = ({navigation}: Props) => {
       </View>
 
       <Text style={styles.label}>IP del servidor</Text>
-        <TextInput
-          style={styles.input}
-          placeholder="Ejemplo: 192.168.0.9"
-          value={serverIp}
-          onChangeText={setServerIp}
-          autoCapitalize="none"
-        />
+      <TextInput
+        style={styles.input}
+        placeholder="Ejemplo: 192.168.0.9"
+        value={serverIp}
+        onChangeText={setServerIp}
+        autoCapitalize="none"
+      />
 
-      <TouchableOpacity style={styles.button} onPress={entrarAlLobby}>
-        <Text style={styles.buttonText}>Entrar al juego</Text>
+      <TouchableOpacity
+        style={styles.button}
+        onPress={entrarAlLobby}>
+        <Text style={styles.buttonText}>
+          Entrar al juego
+        </Text>
       </TouchableOpacity>
-    </View>
-  );
+
+    </ScrollView>
+  </KeyboardAvoidingView>
+);
 };
 
 export default LoginScreen;
 
 const styles = StyleSheet.create({
   container: {
-    flex: 1,
+    flexGrow: 1,
     justifyContent: 'center',
     padding: 20,
     backgroundColor: '#F5F7FB',
