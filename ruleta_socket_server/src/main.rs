@@ -10,6 +10,8 @@ use tokio::{
 };
 use tokio_tungstenite::{accept_async, tungstenite::Message};
 use uuid::Uuid;
+use mongodb::{Client, Database};
+use mongodb::bson::{doc, DateTime};
 
 type Tx = mpsc::UnboundedSender<String>;
 type Clients = Arc<Mutex<HashMap<String, ClientInfo>>>;
@@ -65,6 +67,13 @@ struct OutgoingMessage {
 
 #[tokio::main]
 async fn main() {
+    let mongo_client = Client::with_uri_str("mongodb://localhost:27017")
+    .await
+    .expect("No se pudo conectar a MongoDB");
+
+    let mongo_db: Database = mongo_client.database("pachinko_db");
+
+    println!("Conexión a MongoDB establecida correctamente");
     let address = "0.0.0.0:5000";
 
     let listener = TcpListener::bind(address)
@@ -79,19 +88,21 @@ async fn main() {
     while let Ok((stream, _)) = listener.accept().await {
         let clients_clone = Arc::clone(&clients);
         let rooms_clone = Arc::clone(&rooms);
+        let mongo_db_clone = mongo_db.clone();
 
         tokio::spawn(async move {
-            if let Err(e) = handle_connection(stream, clients_clone, rooms_clone).await {
+            if let Err(e) = handle_connection(stream, clients_clone, rooms_clone, mongo_db_clone).await {
                 eprintln!("Error en conexión: {}", e);
             }
         });
     }
 }
 
-async fn handle_connection(
+    async fn handle_connection(
     stream: TcpStream,
     clients: Clients,
     rooms: Rooms,
+    mongo_db: Database,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let ws_stream = accept_async(stream).await?;
     let (mut ws_sender, mut ws_receiver) = ws_stream.split();
@@ -435,6 +446,14 @@ async fn handle_connection(
                     payload: game_payload,
                 };
 
+                if let Some(players_array) = response.payload.get("players").and_then(|v| v.as_array()) {
+                    save_game_session_start(
+                        &mongo_db,
+                        response.payload.get("roomCode").and_then(|v| v.as_str()).unwrap_or(""),
+                        players_array.clone(),
+                    )
+                    .await;
+                }
                 send_to_room(&clients, &player_ids, &response);
                 broadcast_active_rooms(&rooms, &clients);
             }
@@ -645,6 +664,46 @@ async fn handle_connection(
                     msg_type: "spin_result".to_string(),
                     payload: response_payload,
                 };
+
+                let players_state = response
+                    .payload
+                    .get("players")
+                    .and_then(|v| v.as_array())
+                    .cloned()
+                    .unwrap_or_default();
+
+                save_game_movement(
+                    &mongo_db,
+                    response.payload.get("roomCode").and_then(|v| v.as_str()).unwrap_or(""),
+                    response.payload.get("currentNickname").and_then(|v| v.as_str()).unwrap_or(""),
+                    "",
+                    response.payload.get("result").and_then(|v| v.as_str()).unwrap_or(""),
+                    response.payload.get("pot").and_then(|v| v.as_i64()).unwrap_or(0) as i32,
+                    players_state,
+                    response.payload.get("historyEntry").and_then(|v| v.as_str()).unwrap_or(""),
+                )
+                .await;
+
+                let game_over = response
+                    .payload
+                    .get("gameOver")
+                    .and_then(|v| v.as_bool())
+                    .unwrap_or(false);
+
+                let winner_nickname = response
+                    .payload
+                    .get("winnerNickname")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("");
+
+                if game_over && !winner_nickname.is_empty() {
+                    save_game_session_finish(
+                        &mongo_db,
+                        response.payload.get("roomCode").and_then(|v| v.as_str()).unwrap_or(""),
+                        winner_nickname,
+                    )
+                    .await;
+                }
 
                 send_to_room(&clients, &player_ids, &response);
                 broadcast_active_rooms(&rooms, &clients);
@@ -1088,4 +1147,78 @@ fn find_last_active_player(game_state: &GameState) -> Option<GamePlayer> {
         .iter()
         .find(|player| player.coins > 0)
         .cloned()
+}
+
+async fn save_game_session_start(
+    db: &Database,
+    room_code: &str,
+    players: Vec<serde_json::Value>,
+) {
+    let collection = db.collection::<mongodb::bson::Document>("game_sessions");
+
+    let session_doc = doc! {
+        "roomCode": room_code,
+        "players": mongodb::bson::to_bson(&players).unwrap_or(mongodb::bson::Bson::Null),
+        "status": "started",
+        "startedAt": DateTime::now(),
+        "finishedAt": mongodb::bson::Bson::Null,
+        "winner": mongodb::bson::Bson::Null,
+    };
+
+    if let Err(error) = collection.insert_one(session_doc, None).await {
+        println!("Error guardando sesión en MongoDB: {}", error);
+    }
+}
+
+async fn save_game_movement(
+    db: &Database,
+    room_code: &str,
+    player_nickname: &str,
+    player_avatar: &str,
+    result: &str,
+    pot: i32,
+    players: Vec<serde_json::Value>,
+    history_entry: &str,
+) {
+    let collection = db.collection::<mongodb::bson::Document>("game_movements");
+
+    let movement_doc = doc! {
+        "roomCode": room_code,
+        "playerNickname": player_nickname,
+        "playerAvatar": player_avatar,
+        "result": result,
+        "pot": pot,
+        "playersState": mongodb::bson::to_bson(&players).unwrap_or(mongodb::bson::Bson::Null),
+        "historyEntry": history_entry,
+        "createdAt": DateTime::now(),
+    };
+
+    if let Err(error) = collection.insert_one(movement_doc, None).await {
+        println!("Error guardando movimiento en MongoDB: {}", error);
+    }
+}
+
+async fn save_game_session_finish(
+    db: &Database,
+    room_code: &str,
+    winner_nickname: &str,
+) {
+    let collection = db.collection::<mongodb::bson::Document>("game_sessions");
+
+    let filter = doc! {
+        "roomCode": room_code,
+        "status": "started",
+    };
+
+    let update = doc! {
+        "$set": {
+            "status": "finished",
+            "finishedAt": DateTime::now(),
+            "winner": winner_nickname,
+        }
+    };
+
+    if let Err(error) = collection.update_one(filter, update, None).await {
+        println!("Error finalizando sesión en MongoDB: {}", error);
+    }
 }
