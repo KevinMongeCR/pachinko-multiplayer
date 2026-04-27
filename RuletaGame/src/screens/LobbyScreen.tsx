@@ -93,7 +93,7 @@ const LobbyScreen = ({navigation, route}: Props) => {
 
   return (
     <ScrollView contentContainerStyle={styles.container}>
-      <Text style={styles.title}>Lobby General</Text>
+      <Text style={styles.title}>Pachinko Lobby</Text>
 
       <Text style={styles.status}>
         Estado conexión: {connectionStatus}

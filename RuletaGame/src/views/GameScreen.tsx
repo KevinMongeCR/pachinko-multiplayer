@@ -306,7 +306,7 @@ const reiniciarConMonedasActuales = () => {
 
   return (
     <ScrollView contentContainerStyle={styles.container}>
-      <Text style={styles.title}>Ruleta Game</Text>
+      <Text style={styles.title}>Pachinko</Text>
 
       <View style={styles.roomBox}>
         <Text style={styles.roomTitle}>Sala</Text>

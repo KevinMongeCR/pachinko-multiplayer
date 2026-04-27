@@ -58,7 +58,7 @@ function App() {
         fontFamily: 'Arial',
       }}>
       <h1 style={{textAlign: 'center', marginBottom: '30px'}}>
-        Panel Observador - Ruleta Game
+        Pachinko Web
       </h1>
 
       <div style={cardStyle}>

@@ -5,7 +5,11 @@ type SocketMessage = {
 
 class SocketService {
   private socket: WebSocket | null = null;
-
+  private serverIp: string = '10.0.2.2';
+  setServerIp(ip: string) {
+    this.serverIp = ip;
+    console.log('Nueva IP del servidor:', this.serverIp);
+  }
   connect(
     nickname: string,
     avatar: string,
@@ -17,7 +21,7 @@ class SocketService {
       this.socket = null;
     }
 
-    this.socket = new WebSocket('ws://10.0.2.2:5000');
+    this.socket = new WebSocket(`ws://${this.serverIp}:5000`);
 
     this.socket.onopen = () => {
       console.log('Conectado al servidor Rust');

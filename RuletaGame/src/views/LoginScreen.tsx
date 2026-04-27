@@ -6,6 +6,7 @@ import {
   TouchableOpacity,
   StyleSheet,
 } from 'react-native';
+import {socketService} from '../services/socketService';
 
 type Props = {
   navigation: any;
@@ -13,25 +14,34 @@ type Props = {
 
 const avatars = ['😀', '😎', '🤖'];
 
+
 const LoginScreen = ({navigation}: Props) => {
   const [nickname, setNickname] = useState('');
   const [avatar, setAvatar] = useState('😀');
+  const [serverIp, setServerIp] = useState('10.0.2.2');
 
   const entrarAlLobby = () => {
-    if (!nickname.trim()) {
-      alert('Por favor ingresa un nickname');
-      return;
-    }
+  if (!nickname.trim()) {
+    alert('Por favor ingresa un nickname');
+    return;
+  }
 
-    navigation.navigate('LobbyScreen', {
-      nickname,
-      avatar,
-    });
-  };
+  if (!serverIp.trim()) {
+    alert('Por favor ingresa la IP del servidor');
+    return;
+  }
+
+  socketService.setServerIp(serverIp.trim());
+
+  navigation.navigate('LobbyScreen', {
+    nickname,
+    avatar,
+  });
+};
 
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>Ruleta Game</Text>
+      <Text style={styles.title}>Pachinko</Text>
 
       <Text style={styles.label}>Ingresa tu nickname</Text>
       <TextInput
@@ -56,8 +66,17 @@ const LoginScreen = ({navigation}: Props) => {
         ))}
       </View>
 
+      <Text style={styles.label}>IP del servidor</Text>
+        <TextInput
+          style={styles.input}
+          placeholder="Ejemplo: 192.168.0.9"
+          value={serverIp}
+          onChangeText={setServerIp}
+          autoCapitalize="none"
+        />
+
       <TouchableOpacity style={styles.button} onPress={entrarAlLobby}>
-        <Text style={styles.buttonText}>Entrar al lobby</Text>
+        <Text style={styles.buttonText}>Entrar al juego</Text>
       </TouchableOpacity>
     </View>
   );
